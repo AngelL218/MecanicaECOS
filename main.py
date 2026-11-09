@@ -11,11 +11,12 @@ from tkinter import filedialog, messagebox, ttk
 MAXIMO_BLOQUES = 2000
 COLOR_FONDO = "#f3f7f4"
 COLOR_VERDE = "#2f855a"
+COLOR_VERDE_OSCURO = "#14532d"
 COLOR_AZUL = "#247ba0"
 COLOR_SECO = "#ef6a62"
 COLOR_MEDIO = "#f2c14e"
 COLOR_HUMEDO = "#69b578"
-COLOR_SIN_MEDIR = "#dce3e0"
+COLOR_SIN_MEDIR = "#e8eeea"
 
 
 def crear_bloques(largo, ancho, tamano_bloque):
@@ -90,7 +91,7 @@ class AplicacionHumedad:
         self.ventana = ventana
         self.ventana.title("EcoSuelo | Monitoreo de humedad")
         self.ventana.geometry("1240x850")
-        self.ventana.minsize(1000, 700)
+        self.ventana.minsize(800, 600)
         self.ventana.configure(bg=COLOR_FONDO)
 
         self.nombre_terreno = ""
@@ -106,6 +107,7 @@ class AplicacionHumedad:
         self.limite_alto = 60.0
         self.ordenar_descendente = False
 
+        self.ventana.protocol("WM_DELETE_WINDOW", self.salir_del_sistema)
         self._configurar_estilos()
         self._crear_interfaz()
 
@@ -114,26 +116,40 @@ class AplicacionHumedad:
         estilos.theme_use("clam")
         estilos.configure("TFrame", background=COLOR_FONDO)
         estilos.configure("Card.TFrame", background="white")
+        estilos.configure("Header.TFrame", background=COLOR_VERDE_OSCURO)
         estilos.configure("Card.TLabelframe", background="white")
         estilos.configure(
             "Card.TLabelframe.Label", background="white",
-            foreground="#1f5138", font=("Segoe UI", 9, "bold")
+            foreground=COLOR_VERDE_OSCURO, font=("Segoe UI", 9, "bold")
         )
         estilos.configure("TLabel", background=COLOR_FONDO, foreground="#23352c")
         estilos.configure(
             "Title.TLabel", font=("Segoe UI", 20, "bold"),
-            foreground="#1f5138", background=COLOR_FONDO
+            foreground="white", background=COLOR_VERDE_OSCURO
         )
         estilos.configure(
             "Subtitle.TLabel", font=("Segoe UI", 10),
-            foreground="#52675c", background=COLOR_FONDO
+            foreground="#d8e9de", background=COLOR_VERDE_OSCURO
         )
         estilos.configure(
             "Section.TLabel", font=("Segoe UI", 11, "bold"),
-            foreground="#1f5138", background="white"
+            foreground=COLOR_VERDE_OSCURO, background="white"
+        )
+        estilos.configure("TButton", font=("Segoe UI", 9, "bold"), padding=(10, 7))
+        estilos.configure(
+            "Primary.TButton", background=COLOR_VERDE, foreground="white"
+        )
+        estilos.map(
+            "Primary.TButton",
+            background=[("active", "#276749"), ("pressed", COLOR_VERDE_OSCURO)],
+            foreground=[("disabled", "#dce3e0")],
         )
         estilos.configure(
-            "TButton", font=("Segoe UI", 9, "bold"), padding=(9, 7)
+            "Exit.TButton", background="#fce8e6", foreground="#9b2c2c"
+        )
+        estilos.map(
+            "Exit.TButton",
+            background=[("active", "#f8d7d4"), ("pressed", "#f1b8b2")],
         )
         estilos.configure(
             "Treeview", rowheight=27, font=("Segoe UI", 9),
@@ -141,120 +157,195 @@ class AplicacionHumedad:
         )
         estilos.configure(
             "Treeview.Heading", font=("Segoe UI", 9, "bold"),
-            background="#e6efe9"
+            background="#e6efe9", foreground=COLOR_VERDE_OSCURO,
+            padding=(6, 7)
         )
         estilos.configure(
             "TNotebook", background=COLOR_FONDO, borderwidth=0
         )
         estilos.configure(
-            "TNotebook.Tab", padding=(14, 8), font=("Segoe UI", 9, "bold")
+            "TNotebook.Tab", padding=(16, 9), font=("Segoe UI", 9, "bold")
+        )
+        estilos.map(
+            "TNotebook.Tab",
+            background=[("selected", "white"), ("!selected", "#e7eee9")],
+            foreground=[("selected", COLOR_VERDE_OSCURO), ("!selected", "#52675c")],
+        )
+        estilos.configure(
+            "Info.TLabel", background="white", foreground=COLOR_VERDE_OSCURO,
+            font=("Segoe UI", 10, "bold"), padding=(12, 9)
         )
 
     def _crear_interfaz(self):
-        encabezado = ttk.Frame(self.ventana, padding=(18, 14, 18, 5))
-        encabezado.pack(fill="x")
+        principal = ttk.Frame(self.ventana, padding=14)
+        principal.pack(fill="both", expand=True)
+        principal.rowconfigure(0, weight=1)
+        principal.columnconfigure(0, weight=1)
+        self.divisor = ttk.Panedwindow(principal, orient="horizontal")
+        self.divisor.grid(row=0, column=0, sticky="nsew")
+        self._divisor_inicializado = False
+        self.divisor.bind("<Configure>", self._inicializar_divisor)
+
+        lateral = ttk.Frame(self.divisor, width=300)
+        lateral.rowconfigure(0, weight=1)
+        lateral.columnconfigure(0, weight=1)
+        self.lienzo_lateral = tk.Canvas(
+            lateral, background=COLOR_FONDO, highlightthickness=0, width=300
+        )
+        barra_lateral = ttk.Scrollbar(
+            lateral, orient="vertical", command=self.lienzo_lateral.yview
+        )
+        self.lienzo_lateral.configure(yscrollcommand=barra_lateral.set)
+        self.lienzo_lateral.grid(row=0, column=0, sticky="nsew")
+        barra_lateral.grid(row=0, column=1, sticky="ns")
+        self.panel_controles = ttk.Frame(self.lienzo_lateral)
+        self.ventana_lateral = self.lienzo_lateral.create_window(
+            (0, 0), window=self.panel_controles, anchor="nw"
+        )
+        self.panel_controles.bind(
+            "<Configure>",
+            lambda _evento: self.lienzo_lateral.configure(
+                scrollregion=self.lienzo_lateral.bbox("all")
+            ),
+        )
+        self.lienzo_lateral.bind("<Configure>", self._ajustar_panel_lateral)
+
+        self.informacion = ttk.Label(
+            self.panel_controles,
+            text="Configura el terreno y selecciona «Generar terreno».",
+            style="Info.TLabel",
+            wraplength=250,
+        )
+        self.informacion.pack(fill="x", pady=(0, 8))
+
+        encabezado = ttk.Frame(
+            self.panel_controles, padding=(16, 14), style="Header.TFrame"
+        )
+        encabezado.pack(fill="x", pady=(0, 8))
+        titulo = ttk.Frame(encabezado, style="Header.TFrame")
+        titulo.pack(fill="x")
         ttk.Label(
-            encabezado, text="Detección de Humedad", style="Title.TLabel"
+            titulo, text="EcoSuelo", style="Title.TLabel"
         ).pack(anchor="w")
-        ttk.Label(
-            encabezado,
-            text="Sistema de monitoreo de humedad del suelo · "
-                 "Simulación escolar, sin conexión a hardware",
+        self.subtitulo = ttk.Label(
+            titulo,
+            text="Monitoreo y exploración de humedad del terreno",
             style="Subtitle.TLabel",
-        ).pack(anchor="w", pady=(2, 0))
+            wraplength=250,
+        )
+        self.subtitulo.pack(anchor="w", pady=(2, 0))
 
         self._crear_configuracion()
         self._crear_barra_acciones()
 
-        aviso = tk.Label(
-            self.ventana,
-            text="AVISO: todas las lecturas de esta aplicación son simuladas; "
-                 "no son mediciones reales de sensores.",
-            bg="#e8f3fb", fg="#175b7a", font=("Segoe UI", 9, "bold"),
-            anchor="w", padx=12, pady=8,
-        )
-        aviso.pack(fill="x", padx=18, pady=(0, 8))
+        ttk.Button(
+            self.panel_controles,
+            text="Salir", style="Exit.TButton",
+            command=self.salir_del_sistema,
+        ).pack(fill="x", pady=(0, 8))
 
-        self.informacion = ttk.Label(
-            self.ventana,
-            text="Configura el terreno y selecciona «Generar terreno».",
-            padding=(18, 3),
-        )
-        self.informacion.pack(fill="x")
-
-        self.pestanas = ttk.Notebook(self.ventana)
-        self.pestanas.pack(fill="both", expand=True, padx=18, pady=(4, 14))
+        area_contenido = ttk.Frame(self.divisor)
+        area_contenido.rowconfigure(0, weight=1)
+        area_contenido.columnconfigure(0, weight=1)
+        self.pestanas = ttk.Notebook(area_contenido)
+        self.pestanas.grid(row=0, column=0, sticky="nsew")
+        self.divisor.add(lateral, weight=0)
+        self.divisor.add(area_contenido, weight=1)
         self._crear_pestana_mapa()
         self._crear_pestana_resultados()
         self._crear_pestana_historial()
 
+    def _ajustar_panel_lateral(self, evento):
+        self.lienzo_lateral.itemconfigure(
+            self.ventana_lateral, width=evento.width
+        )
+        ancho_texto = max(160, evento.width - 44)
+        self.informacion.configure(wraplength=ancho_texto)
+        self.aviso_simulacion.configure(wraplength=ancho_texto)
+        self.subtitulo.configure(wraplength=max(150, evento.width - 52))
+
+    def _inicializar_divisor(self, evento):
+        if not self._divisor_inicializado and evento.width > 700:
+            self.divisor.sashpos(0, min(340, evento.width - 400))
+            self._divisor_inicializado = True
+
     def _crear_configuracion(self):
         marco = ttk.LabelFrame(
-            self.ventana, text="Configuración del terreno",
-            padding=(12, 8), style="Card.TLabelframe"
+            self.panel_controles, text="Configuración del terreno",
+            padding=(10, 8), style="Card.TLabelframe"
         )
-        marco.pack(fill="x", padx=18, pady=(8, 7))
+        marco.pack(fill="x", pady=(0, 8))
 
-        self.entrada_nombre = self._campo(marco, "Nombre", "Terreno escolar", 19, 0)
-        self.entrada_largo = self._campo(marco, "Largo X (m)", "20", 9, 2)
-        self.entrada_ancho = self._campo(marco, "Ancho Y (m)", "10", 9, 4)
-        self.entrada_bloque = self._campo(marco, "Bloque (m)", "2", 9, 6)
+        self.entrada_nombre = self._campo(
+            marco, "Nombre del terreno", "Terreno escolar", 24, 0
+        )
+        self.entrada_largo = self._campo(marco, "Largo X (m)", "20", 10, 2)
+        self.entrada_ancho = self._campo(marco, "Ancho Y (m)", "10", 10, 4)
+        self.entrada_bloque = self._campo(marco, "Bloque (m)", "2", 10, 6)
 
         ttk.Button(
-            marco, text="Generar terreno", command=self.generar_terreno
-        ).grid(row=1, column=8, rowspan=2, padx=(14, 4), sticky="ns")
+            marco, text="Generar terreno", style="Primary.TButton",
+            command=self.generar_terreno
+        ).pack(fill="x", pady=(8, 10))
 
-        ttk.Label(marco, text="Humedad baja <").grid(
-            row=0, column=9, padx=(12, 3), sticky="e"
-        )
-        self.entrada_limite_bajo = ttk.Entry(marco, width=6)
+        ttk.Label(
+            marco, text="Límites de humedad", style="Section.TLabel"
+        ).pack(anchor="w", pady=(0, 4))
+        limites = ttk.Frame(marco, style="Card.TFrame")
+        limites.pack(fill="x")
+        limite_bajo = ttk.Frame(limites, style="Card.TFrame")
+        limite_bajo.pack(side="left", fill="x", expand=True, padx=(0, 4))
+        limite_alto = ttk.Frame(limites, style="Card.TFrame")
+        limite_alto.pack(side="left", fill="x", expand=True, padx=(4, 0))
+        ttk.Label(limite_bajo, text="Baja <").pack(anchor="w")
+        self.entrada_limite_bajo = ttk.Entry(limite_bajo, width=8)
         self.entrada_limite_bajo.insert(0, "30")
-        self.entrada_limite_bajo.grid(row=1, column=9, padx=3, sticky="w")
-
-        ttk.Label(marco, text="Humedad alta ≥").grid(
-            row=0, column=10, padx=(8, 3), sticky="e"
-        )
-        self.entrada_limite_alto = ttk.Entry(marco, width=6)
+        self.entrada_limite_bajo.pack(fill="x", pady=(2, 0))
+        ttk.Label(limite_alto, text="Alta ≥").pack(anchor="w")
+        self.entrada_limite_alto = ttk.Entry(limite_alto, width=8)
         self.entrada_limite_alto.insert(0, "60")
-        self.entrada_limite_alto.grid(row=1, column=10, padx=3, sticky="w")
+        self.entrada_limite_alto.pack(fill="x", pady=(2, 0))
         ttk.Button(
             marco, text="Aplicar límites", command=self.aplicar_limites
-        ).grid(row=1, column=11, padx=(5, 0), sticky="w")
+        ).pack(fill="x", pady=(8, 0))
 
     @staticmethod
     def _campo(marco, etiqueta, valor, ancho, columna):
-        ttk.Label(marco, text=etiqueta).grid(
-            row=0, column=columna, padx=(4, 3), sticky="w"
-        )
-        entrada = ttk.Entry(marco, width=ancho)
+        campo = ttk.Frame(marco, style="Card.TFrame")
+        campo.pack(fill="x", pady=3)
+        ttk.Label(campo, text=etiqueta).pack(anchor="w")
+        entrada = ttk.Entry(campo, width=ancho)
         entrada.insert(0, valor)
-        entrada.grid(row=1, column=columna, padx=(4, 8), sticky="w")
+        entrada.pack(fill="x", pady=(2, 0))
         return entrada
 
     def _crear_barra_acciones(self):
-        barra = ttk.Frame(self.ventana, padding=(18, 3, 18, 8))
-        barra.pack(fill="x")
+        barra = ttk.LabelFrame(
+            self.panel_controles, text="Acciones", padding=(8, 7),
+            style="Card.TLabelframe",
+        )
+        barra.pack(fill="x", pady=(0, 2))
         ttk.Button(
             barra, text="Generar ruta zigzag", command=self.generar_ruta
-        ).pack(side="left", padx=(0, 6))
+        ).pack(fill="x", pady=3)
         ttk.Button(
             barra, text="Mostrar / ocultar ruta",
             command=self.alternar_ruta
-        ).pack(side="left", padx=6)
+        ).pack(fill="x", pady=3)
         ttk.Button(
-            barra, text="Simular mediciones",
+            barra, text="Simular mediciones", style="Primary.TButton",
             command=self.simular_mediciones
-        ).pack(side="left", padx=6)
+        ).pack(fill="x", pady=3)
         ttk.Button(
             barra, text="Ruta de zonas secas",
             command=self.mostrar_ruta_seca
-        ).pack(side="left", padx=6)
+        ).pack(fill="x", pady=3)
         ttk.Button(
             barra, text="Exportar CSV", command=self.exportar_csv
-        ).pack(side="left", padx=6)
+        ).pack(fill="x", pady=3)
         ttk.Button(
             barra, text="Reiniciar terreno", command=self.reiniciar_terreno
-        ).pack(side="right")
+        ).pack(fill="x", pady=(8, 3))
 
     def _crear_pestana_mapa(self):
         pestana = ttk.Frame(self.pestanas, padding=10)
@@ -277,8 +368,8 @@ class AplicacionHumedad:
         contenedor = ttk.Frame(pestana)
         contenedor.pack(fill="both", expand=True)
         self.lienzo = tk.Canvas(
-            contenedor, background="white", highlightthickness=1,
-            highlightbackground="#cad8ce"
+            contenedor, background="#f8fbf8", highlightthickness=1,
+            highlightbackground="#d2ded5"
         )
         barra_y = ttk.Scrollbar(
             contenedor, orient="vertical", command=self.lienzo.yview
@@ -823,6 +914,12 @@ class AplicacionHumedad:
                 ),
             )
 
+    def salir_del_sistema(self):
+        if messagebox.askyesno(
+            "Salir de EcoSuelo", "¿Deseas cerrar la aplicación?"
+        ):
+            self.ventana.destroy()
+
     def _al_cambiar_mapa(self, evento):
         if self.bloques and evento.width > 1 and evento.height > 1:
             self._dibujar_mapa()
@@ -842,20 +939,21 @@ class AplicacionHumedad:
         vista_ancho = max(self.lienzo.winfo_width(), 500)
         vista_alto = max(self.lienzo.winfo_height(), 350)
         escala_ajustada = min(
-            (vista_ancho - 70) / self.largo,
-            (vista_alto - 80) / self.ancho,
-            70,
+            (vista_ancho - 100) / self.largo,
+            (vista_alto - 90) / self.ancho,
+            86,
         )
-        escala = max(6, escala_ajustada)
+        escala = max(4, escala_ajustada)
         mapa_ancho = self.largo * escala
         mapa_alto = self.ancho * escala
-        margen_x = max(35, (vista_ancho - mapa_ancho) / 2)
-        margen_y = max(35, (vista_alto - mapa_alto) / 2)
+        margen_x = max(50, (vista_ancho - mapa_ancho) / 2)
+        margen_y = max(38, (vista_alto - mapa_alto) / 2)
 
         self.lienzo.create_text(
-            margen_x + mapa_ancho / 2, max(14, margen_y - 19),
-            text=f"{self.nombre_terreno} · X = largo · Y = ancho (m)",
-            fill="#1f5138", font=("Segoe UI", 11, "bold"),
+            margen_x + mapa_ancho / 2, max(20, margen_y - 23),
+            text=f"{self.nombre_terreno}   ·   {self.largo:g} × "
+                 f"{self.ancho:g} m",
+            fill=COLOR_VERDE_OSCURO, font=("Segoe UI", 11, "bold"),
         )
 
         for bloque in self.bloques:
@@ -874,7 +972,7 @@ class AplicacionHumedad:
                 "Alta": COLOR_HUMEDO,
             }[estado]
             self.lienzo.create_rectangle(
-                x1, y1, x2, y2, fill=color, outline="#60766a", width=1
+                x1, y1, x2, y2, fill=color, outline="#ffffff", width=1
             )
             centro_x = margen_x + bloque["x"] * escala
             centro_y = margen_y + (self.ancho - bloque["y"]) * escala
@@ -882,27 +980,52 @@ class AplicacionHumedad:
             alto_celda = y2 - y1
             medicion = self.lecturas.get(bloque["numero"])
 
-            if ancho_celda >= 54 and alto_celda >= 43:
-                lineas = [
-                    f"#{bloque['numero']}",
-                    f"X {bloque['x']:.2f}, Y {bloque['y']:.2f}",
-                ]
-                if medicion is not None:
-                    lineas.append(f"{medicion['humedad']:.1f} %")
+            if ancho_celda >= 105 and alto_celda >= 75:
+                humedad = (
+                    "Sin medir" if medicion is None
+                    else f"{medicion['humedad']:.1f} %"
+                )
                 self.lienzo.create_text(
-                    centro_x, centro_y + 5, text="\n".join(lineas),
-                    fill="#20362a", font=("Segoe UI", 8),
+                    centro_x, y1 + 13, text=f"#{bloque['numero']}",
+                    fill="#20362a", font=("Segoe UI", 9, "bold"),
+                )
+                self.lienzo.create_text(
+                    centro_x, centro_y - 9,
+                    text=f"X {bloque['x']:.1f} · Y {bloque['y']:.1f} m",
+                    fill="#35483c", font=("Segoe UI", 8),
+                )
+                self.lienzo.create_text(
+                    centro_x, y2 - 11, text=humedad,
+                    fill="#20362a", font=("Segoe UI", 8, "bold"),
+                )
+            elif ancho_celda >= 38 and alto_celda >= 34:
+                humedad = (
+                    "Sin medir" if medicion is None
+                    else f"{medicion['humedad']:.0f} %"
+                )
+                self.lienzo.create_text(
+                    centro_x, y1 + 9, text=f"#{bloque['numero']}",
+                    fill="#20362a", font=("Segoe UI", 7, "bold"),
+                )
+                self.lienzo.create_text(
+                    centro_x, y2 - 7, text=humedad,
+                    fill="#35483c", font=("Segoe UI", 6),
                 )
             else:
                 self.lienzo.create_text(
-                    centro_x, centro_y + 5, text=str(bloque["numero"]),
-                    fill="#20362a", font=("Segoe UI", 7),
+                    centro_x, centro_y, text=str(bloque["numero"]),
+                    fill="#20362a", font=("Segoe UI", 7, "bold"),
                 )
 
             self.lienzo.create_oval(
                 centro_x - 3, centro_y - 3, centro_x + 3, centro_y + 3,
-                fill="#14532d", outline="white", width=1,
+                fill=COLOR_VERDE_OSCURO, outline="white", width=1,
             )
+
+        self.lienzo.create_rectangle(
+            margen_x, margen_y, margen_x + mapa_ancho,
+            margen_y + mapa_alto, outline="#789083", width=2,
+        )
 
         if self.modo_ruta == "principal" and self.ruta_principal:
             self._dibujar_ruta(self.ruta_principal, margen_x, margen_y, escala)

@@ -40,6 +40,10 @@ py main.py
 
 ## Uso de la aplicación
 
+Puedes arrastrar el separador vertical entre el panel de controles y las
+pestañas para ajustar cuánto espacio ocupa cada lado. El contenido se adapta
+al cambiar el tamaño de la ventana.
+
 1. En **Configuración del terreno**, escribe el nombre, el largo (eje X), el
    ancho (eje Y) y el tamaño de los bloques. Las medidas deben ser mayores que
    cero. Si una dimensión no es múltiplo del bloque, el bloque del borde se
@@ -70,7 +74,8 @@ py main.py
    coordenadas, el estado y el orden de la ruta (si se generó).
 9. **Reiniciar terreno** borra el mapa y las mediciones después de pedir
    confirmación. También se solicita confirmación al reemplazar un terreno
-   existente.
+   existente. El botón **Salir** y el control de cierre de la ventana piden
+   confirmación antes de cerrar la aplicación.
 
 ## Archivos
 
