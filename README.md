@@ -3,7 +3,8 @@
 Aplicación de escritorio para monitorear por USB Serial la humedad del suelo
 con un ESP32, un sensor FC-28 y un servomotor MG995. La interfaz Tkinter
 recibe mensajes JSON, muestra las lecturas y su gráfica, y conserva las
-mediciones en CSV. No utiliza Wi-Fi ni Bluetooth.
+mediciones en CSV. La comunicación principal es USB; el firmware incluye
+BluetoothSerial para pruebas futuras.
 
 ## Estructura
 
@@ -54,64 +55,49 @@ comprueba que el recorrido de 0° a 90° no choque con el montaje.
 5. Cierra el monitor serial del IDE antes de conectar EcoSuelo: un puerto COM
    normalmente solo puede ser abierto por una aplicación a la vez.
 
-El programa espera el intervalo configurado, mueve el servo a 90°, espera un
-segundo, promedia 20 lecturas ADC y devuelve el servo a 0° tras cada medición.
-El firmware utiliza `analogReadResolution(12)`, por lo que el valor ADC va de
-0 a 4095.
+Al arrancar, el servo se coloca en 90°. Al recibir `start`, se mueve a 15° y
+envía inmediatamente una medición promedio de 20 lecturas ADC. Las siguientes
+mediciones respetan el intervalo configurado. Al recibir `stop`, el servo vuelve
+a 90°. El ángulo de reposo y el de medición son constantes editables en el
+firmware.
 
-### Calibrar el porcentaje
+### Porcentaje de humedad
 
-El porcentaje es una estimación, no una medición universal del contenido de
-agua. En la parte superior de `esp32_ecosuelo/esp32_ecosuelo.ino`, ajusta `ADC_SECO` y
-`ADC_HUMEDO` con las lecturas reales de tu sensor: toma el promedio en suelo
-seco y en suelo húmedo, respectivamente. Los valores iniciales (4095 y 0) son
-los extremos del ADC y sirven solo como referencia; no sustituyen la
-calibración. La fórmula admite extremos en cualquiera de los dos sentidos.
+La versión inicial usa
+`humedad = ((4095 - ADC_promedio) * 100) / 4095` y limita el resultado entre
+0 y 100 %. Puede variar según el sensor, el montaje y el sustrato; por eso se
+deberá calibrar antes de interpretarla como contenido de agua universal.
 
-## Instalar y ejecutar en VS Code (Windows)
-
-Abre la carpeta del proyecto en VS Code y, en una terminal integrada de
-PowerShell, instala la dependencia:
+## Instalar y ejecutar
 
 ```powershell
 python -m pip install -r requirements.txt
-```
-
-Selecciona el intérprete Python de tu entorno con **Python: Select Interpreter**
-en la paleta de comandos. Tkinter viene incluido normalmente con Python para
-Windows. Ejecuta:
-
-```powershell
 python main.py
 ```
 
-Si `python` no está en PATH, usa `py -m pip install -r requirements.txt` y
-`py main.py`.
-
 ## Uso
 
-1. En **Puerto COM**, selecciona el puerto que aparece al conectar la placa. Si
-   no aparece, pulsa **Actualizar**. En Windows se puede revisar el nombre en
-   Administrador de dispositivos → Puertos (COM y LPT); cierra Arduino Serial
-   Monitor u otra aplicación que lo esté usando.
-2. Pulsa **Conectar** y espera el estado “Conectado”. El ESP32 envía un mensaje
-   de estado al iniciar; los botones de monitoreo se habilitan cuando llega.
-3. Define el intervalo entre 1 y 86400 segundos y pulsa **Iniciar**. El umbral
-   “seco” se puede ajustar entre 0 y 100 %. Por debajo del umbral la interfaz
-   clasifica la lectura como “Seca”; en o sobre él, como “Húmeda”.
-4. **Detener** ordena al ESP32 dejar de programar mediciones. Si ya hay una
-   lectura en curso, el firmware la termina y retorna el servo a 0° antes de
-   procesar la orden.
-5. La tabla, los indicadores y la gráfica se actualizan con cada mensaje. Las
-   lecturas se anexan automáticamente a `datos/historial.csv`; el identificador
-   único del arranque y secuencia evita volver a guardar un mensaje repetido.
-   **Guardar CSV como…** exporta todo el historial a otra ubicación.
-6. Desconectar detiene la comunicación. Si el cable se desconecta, la
-   aplicación lo indica y conserva el historial ya guardado.
+1. Selecciona el puerto COM del ESP32 y pulsa **Conectar**.
+2. Pulsa **Mover servomotor a 15°** para probar manualmente esa posición.
+3. Define el intervalo entre 1 y 86400 segundos y pulsa **Iniciar**. La primera
+   medición llega inmediatamente y el servo permanece a 15°.
+4. Pulsa **Detener** para finalizar las mediciones y devolver el servo a 90°.
 
-Los comandos y respuestas son objetos JSON terminados en salto de línea,
-transmitidos a **115200 baudios**. La aplicación no requiere hardware para
-ejecutar sus pruebas unitarias:
+Los formatos principales son `{"command":"status"}`,
+`{"command":"servo","angle":15}`, `{"command":"start","interval_ms":10000}`
+y `{"command":"stop"}`.
+
+## Diagnóstico de carga USB
+
+`No serial data received` no demuestra que el código tenga un error. Antes de
+modificarlo, usa un cable USB con datos, selecciona el puerto COM correcto,
+cierra el Monitor Serial y confirma el controlador CP210x o CH340/CH343 en
+Administrador de dispositivos. Si no entra automáticamente en modo descarga,
+mantén BOOT y pulsa/release RESET mientras inicia la carga. Confirma la variante
+de la placa y las bibliotecas ESP32Servo/ESP32. Comprueba la alimentación del
+servo por separado y evita topes mecánicos.
+
+Para ejecutar las pruebas Python:
 
 ```powershell
 python -m unittest -v

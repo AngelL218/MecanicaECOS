@@ -91,6 +91,11 @@ class InterfazEcoSuelo:
         ttk.Button(
             conexion, text="Guardar CSV como…", command=self.guardar_csv
         ).grid(row=2, column=3, pady=(10, 0), sticky="e")
+        self.boton_servo = ttk.Button(
+            conexion, text="Mover servomotor a 15°",
+            command=self.mover_servomotor, state="disabled",
+        )
+        self.boton_servo.grid(row=2, column=0, pady=(10, 0), sticky="w")
 
         datos = ttk.LabelFrame(contenedor, text="Última medición", padding=10)
         datos.grid(row=2, column=0, sticky="nsew", pady=8)
@@ -179,6 +184,7 @@ class InterfazEcoSuelo:
             return
         try:
             self.comunicacion.conectar(puerto)
+            self.comunicacion.enviar({"command": "status"})
         except RuntimeError as error:
             messagebox.showerror("Error de conexión", str(error))
             self.estado_conexion.set("Error de conexión")
@@ -186,6 +192,17 @@ class InterfazEcoSuelo:
         self.esp32_listo = False
         self.estado_conexion.set(f"Conectado a {puerto}; esperando al ESP32…")
         self.boton_conexion.configure(text="Desconectar")
+
+    def mover_servomotor(self):
+        if not self.esp32_listo:
+            messagebox.showwarning(
+                "ESP32 no listo", "Espera a que el ESP32 responda por el puerto serial."
+            )
+            return
+        try:
+            self.comunicacion.enviar({"command": "servo", "angle": 15})
+        except RuntimeError as error:
+            messagebox.showerror("Error de comunicación", str(error))
 
     def iniciar_monitoreo(self):
         try:
@@ -321,6 +338,9 @@ class InterfazEcoSuelo:
         )
         self.boton_detener.configure(
             state="normal" if conectado and self.monitoreando else "disabled"
+        )
+        self.boton_servo.configure(
+            state="normal" if conectado and self.esp32_listo else "disabled"
         )
 
     def cerrar(self):
